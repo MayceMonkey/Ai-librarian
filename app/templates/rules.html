@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Metadata Rules</h1>
+<p class="muted">The genre audit is additive: each book may receive every applicable canonical genre. Aliases use <code>incoming = canonical</code>.</p>
+<form action="/rules" method="post" data-ajax>
+  <div class="compare">
+    <section><h2>Canonical genres</h2><textarea name="genres" rows="28">{{ genres }}</textarea></section>
+    <section><h2>Genre aliases</h2><textarea name="aliases" rows="28">{{ aliases }}</textarea></section>
+  </div>
+  <button data-busy-text="Saving…">Save rules</button>
+</form>
+{% endblock %}

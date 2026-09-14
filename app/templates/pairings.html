@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row"><div><h1>Audio + eBook Pairing</h1><p class="muted">Find separate audiobook and e-book items that appear to be the same work, then store the e-book inside the audiobook's book folder so Audiobookshelf can present both formats as one item.</p></div><span class="badge good">{{ hybrid_count }} already hybrid</span></div>
+<div class="tabs"><a href="/pairings?status=pending&library_id={{ library_id }}">Pending</a><a href="/pairings?status=paired&library_id={{ library_id }}">Paired</a><a href="/pairings?status=moved-pending-scan&library_id={{ library_id }}">Needs ABS scan</a><a href="/pairings?status=dismissed&library_id={{ library_id }}">Dismissed</a></div>
+{% if not storage_enabled %}
+<div class="warning-note"><strong>Detection is working, but direct file moves are disabled.</strong><br>Mount the same Audiobookshelf library root into AI Librarian and set <code>MEDIA_LIBRARY_ROOT=/abs-library</code>. Until then this screen still shows the exact source and destination paths so you can reorganize them manually.</div>
+{% else %}<div class="good-note"><strong>Direct storage pairing is enabled.</strong> Media root: <code>{{ media_library_root }}</code>. The app moves only supported e-book files; it does not move or rewrite the audiobook audio.</div>{% endif %}
+<div class="warning-note"><strong>Reading-progress note:</strong> moving a separately tracked e-book into an audiobook item may not transfer the old e-book item's reading progress. The files are preserved, but Audiobookshelf may treat the combined item as a different progress record.</div>
+{% for p in pairs %}{% set a=p.details_obj.audio %}{% set e=p.details_obj.ebook %}
+<article class="pair-card" data-suggestion-card>
+  <div class="section-title-row"><div><span class="badge {% if p.score >= 0.96 %}good{% else %}warn-badge{% endif %}">{{ (p.score*100)|round|int }}% pair</span><h3>{{ a.metadata.title or e.metadata.title or '(untitled)' }}</h3><p class="muted">{{ p.reason }}</p></div></div>
+  <div class="pair-compare">
+    <div class="pair-side"><div class="pair-icon">🎧</div><h3>Audiobook</h3><p><strong>{{ a.metadata.title or '(untitled)' }}</strong><br>{{ a.metadata.authorName or 'Unknown author' }}</p><dl><dt>ABS format</dt><dd>{{ a.profile.label }}</dd><dt>Current storage</dt><dd><code>{{ a.storage.relPath or a.storage.path or 'Unknown' }}</code></dd></dl></div>
+    <div class="pair-arrow">＋</div>
+    <div class="pair-side"><div class="pair-icon">📖</div><h3>E-book</h3><p><strong>{{ e.metadata.title or '(untitled)' }}</strong><br>{{ e.metadata.authorName or 'Unknown author' }}</p><dl><dt>ABS format</dt><dd>{{ e.profile.label }}</dd><dt>Current storage</dt><dd><code>{{ e.storage.relPath or e.storage.path or 'Unknown' }}</code></dd><dt>Detected files</dt><dd>{% for f in e.storage.ebookFiles %}<code>{{ f.filename }}</code>{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd></dl></div>
+    <div class="pair-arrow">→</div>
+    <div class="pair-side target"><div class="pair-icon">🎧📖</div><h3>Combined ABS item</h3><p class="muted">The e-book file will be moved into:</p><p><code>{{ a.storage.relPath or '(unknown audiobook folder)' }}</code></p>{% if a.storage.isFile %}<div class="error">This audiobook is a single file at the library root. Put it in a book folder first; automatic pairing will not move the audio file for you.</div>{% endif %}</div>
+  </div>
+  {% if p.error %}<div class="error">{{ p.error }}</div>{% endif %}
+  {% if p.status == 'pending' %}<div class="actions">
+    <form action="/pairings/{{ p.pair_key }}/merge" method="post" data-ajax data-reload-on-success data-confirm="Move the detected e-book file(s) into this audiobook folder and ask Audiobookshelf to rescan both items?">
+      <label>Optional e-book filename stem<input type="text" name="filename_stem" placeholder="Leave blank to preserve filename" value=""></label>
+      <button {% if not storage_enabled or a.storage.isFile %}disabled{% endif %} data-busy-text="Pairing…">Move eBook into audiobook folder</button>
+    </form>
+    <form action="/pairings/{{ p.pair_key }}/dismiss" method="post" data-ajax data-reload-on-success><button class="secondary" data-busy-text="Dismissing…">Not the same book</button></form>
+  </div>{% elif p.status == 'paired' %}<div class="good-note">Paired on disk. Run a normal AI Librarian scan after ABS finishes its rescan to confirm the item now reports as Hybrid.</div>{% elif p.status == 'moved-pending-scan' %}<div class="warning-note">The file move completed, but the automatic ABS rescan did not confirm cleanly. Run an Audiobookshelf library scan, then scan again here.</div>{% endif %}
+</article>
+{% else %}<div class="empty">No {{ status|replace('-', ' ') }} audio/e-book pairs. Run a fresh library scan to populate this screen.</div>{% endfor %}
+{% if pages > 1 %}<nav class="pager">{% if page > 1 %}<a class="button-link secondary" href="/pairings?status={{ status }}&page={{ page-1 }}&library_id={{ library_id }}">← Previous</a>{% endif %}<span>Page {{ page }} of {{ pages }} · {{ total }} pairs</span>{% if page < pages %}<a class="button-link secondary" href="/pairings?status={{ status }}&page={{ page+1 }}&library_id={{ library_id }}">Next →</a>{% endif %}</nav>{% endif %}
+{% endblock %}

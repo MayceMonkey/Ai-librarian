@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row">
+  <div><h1>{{ status|title }} Suggestions</h1><p class="muted">{{ total }} total · showing up to {{ per_page }} per page. Suggestions without writable metadata stay visible but are not batch-applicable.</p></div>
+  <div class="tabs"><a href="/suggestions?status=pending">Pending</a><a href="/suggestions?status=applied">Applied</a><a href="/suggestions?status=ignored">Ignored</a></div>
+</div>
+
+{% if status == 'pending' %}
+<div class="batchbar">
+  <label class="check"><input type="checkbox" id="selectAll"> Select applicable on this page</label>
+  <button type="submit" form="batchForm" name="action" value="apply" data-busy-text="Applying…">Apply selected</button>
+  <button type="submit" form="batchForm" class="secondary" name="action" value="ignore" data-busy-text="Ignoring…">Ignore selected</button>
+  {% if settings.allow_auto_apply %}<form action="/auto-apply" method="post" data-ajax class="inline-form"><button type="submit" class="secondary" data-busy-text="Auto applying…">Auto apply ≥ {{ (settings.auto_apply_threshold*100)|round|int }}%</button></form>{% endif %}
+  <span id="selectedCount" class="muted">0 selected</span>
+  <span id="actionProgress" class="action-progress hidden"></span>
+</div>
+<form id="batchForm" action="/batch" method="post" data-ajax data-action-job></form>
+{% endif %}
+
+<div class="suggestions" id="suggestionsList">
+{% for s in rows %}
+{% set protected_metadata = s.control.metadata_lock or s.control.full_lock or s.control.complete %}
+<article class="suggestion{% if status == 'applied' %} suggestion-applied{% endif %}{% if status == 'applied' and s.control.metadata_lock and not s.control.complete and not s.control.full_lock %} suggestion-metadata-locked{% endif %}{% if status == 'applied' and (s.control.complete or s.control.full_lock) %} suggestion-complete{% endif %}" id="suggestion-{{ s.id }}" data-suggestion-card>
+  <div class="suggestion-top">
+    <div class="suggestion-title-block">
+      {% if status == 'pending' and s.applicable %}<input class="pick" type="checkbox" name="ids" value="{{ s.id }}" form="batchForm">{% endif %}
+      <div>
+        <h3><a href="/suggestions/{{ s.id }}">{{ s.title }}</a></h3>
+        <div class="badges">
+          <span class="badge media-{{ s.profile.get('kind','unknown') }}">{{ s.profile.get('label','Unknown format') }}</span>
+          <span class="badge">{{ (s.confidence*100)|round|int }}%</span>
+          <span class="badge">{{ s.source }}</span>
+          {% if status == 'applied' and s.control.complete %}<span class="badge badge-complete">✓ Complete</span>{% elif status == 'applied' and s.control.full_lock %}<span class="badge badge-complete">Full lock</span>{% elif status == 'applied' and s.control.metadata_lock %}<span class="badge badge-metadata-lock">Metadata locked</span>{% endif %}
+          {% if not s.applicable and status == 'pending' %}<span class="badge warn-badge">review-only / no writable fields</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if s.status == 'pending' %}
+    <div class="actions">
+      <a class="button-link secondary" href="/suggestions/{{ s.id }}">Edit fields</a>
+      {% if s.applicable %}
+      <form action="/suggestions/{{ s.id }}/apply" method="post" data-ajax data-remove-card><button data-busy-text="Applying…">Apply</button></form>
+      <form action="/suggestions/{{ s.id }}/apply-metadata-lock" method="post" data-ajax data-remove-card data-confirm="Apply this suggestion, then lock this book's metadata against future changes?"><button class="secondary lock-apply" data-busy-text="Applying + locking…">Apply + Metadata Lock</button></form>
+      <form action="/suggestions/{{ s.id }}/apply-complete" method="post" data-ajax data-remove-card data-confirm="Apply this suggestion, then mark the book complete and skip future provider/AI work?"><button class="complete-action" data-busy-text="Applying + completing…">Apply + Complete</button></form>
+      {% endif %}
+      <form action="/suggestions/{{ s.id }}/ignore" method="post" data-ajax data-remove-card><button class="secondary" data-busy-text="Ignoring…">Ignore</button></form>
+    </div>
+    {% elif s.status == 'applied' %}
+    <div class="actions">
+      {% if protected_metadata %}
+      <button class="secondary revert-disabled" disabled title="Unlock metadata before reverting">Revert</button>
+      {% else %}
+      <form action="/suggestions/{{ s.id }}/revert" method="post" data-ajax data-reload-on-success><button class="danger" data-busy-text="Reverting…">Revert</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <ul>{% for reason in s.reasons_list %}<li>{{ reason }}</li>{% endfor %}</ul>
+  {% if s.selected_fields_list %}<p class="muted">Fields selected to apply: {{ s.selected_fields_list|join(', ') }}</p>{% endif %}
+  {% if s.error %}<div class="error">{{ s.error }}</div>{% endif %}
+</article>
+{% else %}<div class="empty">No {{ status }} suggestions.</div>{% endfor %}
+</div>
+
+{% if pages > 1 %}<nav class="pager" aria-label="Review pages">
+  {% if page > 1 %}<a class="button-link secondary" href="/suggestions?status={{ status }}&page={{ page-1 }}">← Previous</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="button-link secondary" href="/suggestions?status={{ status }}&page={{ page+1 }}">Next →</a>{% endif %}
+</nav>{% endif %}
+{% endblock %}

@@ -1,0 +1,60 @@
+services:
+  ai-librarian:
+    build: .
+    container_name: ai-librarian
+    restart: unless-stopped
+    ports:
+      - "13379:8080"
+    environment:
+      ABS_URL: ${ABS_URL:-http://host.docker.internal:13378}
+      ABS_API_KEY: ${ABS_API_KEY:-}
+      LIBRARY_ID: ${LIBRARY_ID:-}
+
+      AUDIOSILO_ENABLED: ${AUDIOSILO_ENABLED:-true}
+      AUDIOSILO_URL: ${AUDIOSILO_URL:-https://meta.audiosilo.app/abs}
+      OPENLIBRARY_ENABLED: ${OPENLIBRARY_ENABLED:-true}
+      OPENLIBRARY_CONTACT: ${OPENLIBRARY_CONTACT:-}
+      HARDCOVER_ENABLED: ${HARDCOVER_ENABLED:-false}
+      HARDCOVER_URL: ${HARDCOVER_URL:-https://provider.vito0912.de/hardcover}
+      PROVIDER_MIN_SCORE: ${PROVIDER_MIN_SCORE:-0.86}
+      PROVIDER_CACHE_DAYS: ${PROVIDER_CACHE_DAYS:-30}
+      SCAN_CONCURRENCY: ${SCAN_CONCURRENCY:-4}
+      APPLY_CONCURRENCY: ${APPLY_CONCURRENCY:-4}
+      REVIEW_PAGE_SIZE: ${REVIEW_PAGE_SIZE:-50}
+      COVER_PAGE_SIZE: ${COVER_PAGE_SIZE:-16}
+      MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-}
+      MEDIA_PATH_MAP: ${MEDIA_PATH_MAP:-}
+      PAIR_MIN_SCORE: ${PAIR_MIN_SCORE:-0.88}
+
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      LOCAL_AI_ONLY: ${LOCAL_AI_ONLY:-true}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-5-mini}
+      AI_SCAN_MODE: ${AI_SCAN_MODE:-smart}
+      AI_METADATA_CORRECTIONS: ${AI_METADATA_CORRECTIONS:-true}
+      AI_REASONING_EFFORT: ${AI_REASONING_EFFORT:-minimal}
+      AI_MAX_COMPLETION_TOKENS: ${AI_MAX_COMPLETION_TOKENS:-400}
+      AI_MAX_SCAN_COST_USD: ${AI_MAX_SCAN_COST_USD:-0.10}
+      AI_CACHE_DAYS: ${AI_CACHE_DAYS:-90}
+      AI_INPUT_PRICE_PER_MILLION: ${AI_INPUT_PRICE_PER_MILLION:-0.25}
+      AI_CACHED_INPUT_PRICE_PER_MILLION: ${AI_CACHED_INPUT_PRICE_PER_MILLION:-0.025}
+      AI_OUTPUT_PRICE_PER_MILLION: ${AI_OUTPUT_PRICE_PER_MILLION:-2.00}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
+      OLLAMA_THINK: ${OLLAMA_THINK:-false}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-15m}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
+      OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0.1}
+      OLLAMA_CONCURRENCY: ${OLLAMA_CONCURRENCY:-1}
+
+      SCHEDULED_SCANS_ENABLED: ${SCHEDULED_SCANS_ENABLED:-false}
+      SCHEDULED_SCAN_HOURS: ${SCHEDULED_SCAN_HOURS:-24}
+      SCHEDULED_USE_AI: ${SCHEDULED_USE_AI:-false}
+
+      AUTO_APPLY_THRESHOLD: ${AUTO_APPLY_THRESHOLD:-0.98}
+      ALLOW_AUTO_APPLY: ${ALLOW_AUTO_APPLY:-false}
+    volumes:
+      - ./config:/config
+      # Optional direct pairing support. Point ABS_LIBRARY_HOST_PATH at the SAME host folder ABS mounts as its book library, then uncomment:
+      # - ${ABS_LIBRARY_HOST_PATH}:/abs-library

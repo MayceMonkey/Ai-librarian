@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row">
+  <div><h1>Settings</h1><p class="muted">Saved here, applied immediately, and persisted in <code>/config/librarian.db</code>. No rebuild required.</p></div>
+  <span class="badge">{{ override_count }} app overrides</span>
+</div>
+
+<div class="good-note"><strong>Settings precedence:</strong> values saved on this page override Docker/.env values. Your existing .env remains the fallback for fields you reset.</div>
+<div class="warning-note"><strong>Docker note:</strong> a Settings page cannot create or change volume mounts. Audio + eBook pairing still requires the media folder to already be mounted into this container.</div>
+{% if settings.ollama_url.startswith('http://localhost') or settings.ollama_url.startswith('http://127.0.0.1') %}
+<div class="warning-note"><strong>Ollama URL warning:</strong> AI Librarian is running in Docker, so <code>{{ settings.ollama_url }}</code> points back to this container. If Ollama runs on Windows, use <code>http://host.docker.internal:11434</code>.</div>
+{% endif %}
+
+<div class="settings-toolbar">
+  <form action="/settings/test/abs" method="post" data-ajax><button class="secondary" data-busy-text="Testing ABS…">Test Audiobookshelf</button></form>
+  <form action="/settings/test/ollama" method="post" data-ajax><button class="secondary" data-busy-text="Testing Ollama…">Test Ollama</button></form>
+  <form action="/settings/reset" method="post" data-ajax data-reload-on-success data-confirm="Clear all Settings-tab overrides and return to the container/.env defaults currently loaded at startup?"><button class="danger">Reset app overrides</button></form>
+</div>
+
+<form action="/settings" method="post" data-ajax data-reload-on-success id="settingsForm">
+{% for group_name, fields in groups %}
+<section class="settings-section">
+  <h2>{{ group_name }}</h2>
+  <div class="settings-grid">
+  {% for f in fields %}
+    <label class="setting-field {% if f.kind == 'bool' %}setting-toggle{% endif %}">
+      <span class="setting-label">{{ f.label }} {% if f.overridden %}<small class="override-dot" title="Saved application override">app</small>{% endif %}</span>
+      {% if f.kind == 'bool' %}
+        <span class="toggle-line"><input type="checkbox" name="{{ f.key }}" value="1" {% if f.value %}checked{% endif %}><span>{{ 'Enabled' if f.value else 'Disabled' }}</span></span>
+      {% elif f.kind == 'select' %}
+        <select name="{{ f.key }}">{% for val,label in f.options %}<option value="{{ val }}" {% if f.value|string == val|string %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      {% elif f.kind == 'library' %}
+        <select name="{{ f.key }}"><option value="">— none —</option>{% for lib in libraries %}<option value="{{ lib.id }}" {% if f.value == lib.id %}selected{% endif %}>{{ lib.name }}</option>{% endfor %}{% if f.value and not libraries %}<option selected value="{{ f.value }}">{{ f.value }}</option>{% endif %}</select>
+      {% elif f.kind == 'textarea' %}
+        <textarea name="{{ f.key }}" rows="4" spellcheck="false">{{ f.value }}</textarea>
+      {% elif f.kind == 'password' %}
+        <input type="password" name="{{ f.key }}" value="" autocomplete="new-password" placeholder="{% if f.configured %}Configured — leave blank to keep{% else %}Not configured{% endif %}">
+        {% if f.configured %}<span class="secret-clear"><input type="checkbox" name="clear_{{ f.key }}" value="1"> Clear saved value</span>{% endif %}
+      {% elif f.kind == 'number' %}
+        <input type="number" name="{{ f.key }}" value="{{ f.value }}" step="{{ f.step|default('any') }}" {% if f.min is defined %}min="{{ f.min }}"{% endif %} {% if f.max is defined %}max="{{ f.max }}"{% endif %}>
+      {% else %}
+        <input type="text" name="{{ f.key }}" value="{{ f.value }}" spellcheck="false">
+      {% endif %}
+      {% if f.help %}<small>{{ f.help }}</small>{% endif %}
+    </label>
+  {% endfor %}
+  </div>
+</section>
+{% endfor %}
+<div class="settings-savebar"><button type="submit" data-busy-text="Saving settings…">Save & apply settings</button><span class="muted">Changes affect new requests/scans immediately. Existing in-flight work may finish with its original context.</span></div>
+</form>
+{% endblock %}

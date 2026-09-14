@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row"><div><h1>Cover Art</h1><p class="muted">Review only covers that still need a decision. Applied and ignored choices are remembered across scans.</p></div><span class="badge">{{ total }} pending</span></div>
+<div class="tabs cover-tabs">
+  <a class="button-link" href="/covers?library_id={{ library_id }}">Pending Covers ({{ total }})</a>
+  <a class="button-link secondary" href="/covers/updated?library_id={{ library_id }}">Updated Covers ({{ updated_total }})</a>
+  <a class="button-link secondary" href="/covers/ignored?library_id={{ library_id }}">Ignored / Locked ({{ ignored_total + cover_locked }})</a>
+</div>
+<div class="cover-auto-bar">
+  <div><strong>High-confidence covers</strong><div class="muted">{{ auto_count }} pending book{{ '' if auto_count == 1 else 's' }} have an unlocked, non-ignored best match of at least {{ (auto_threshold*100)|round|int }}%.</div></div>
+  <form action="/covers/auto-apply" method="post" data-ajax data-reload-on-success data-confirm="Automatically replace the cover for every eligible pending book whose BEST cover match is at least {{ (auto_threshold*100)|round|int }}%? Locked and ignored books/candidates are excluded.">
+    <input type="hidden" name="library_id" value="{{ library_id }}"><input type="hidden" name="threshold" value="{{ auto_threshold }}">
+    <button {% if auto_count == 0 %}disabled{% endif %} data-busy-text="Starting cover updates…">Auto-update ≥{{ (auto_threshold*100)|round|int }}% ({{ auto_count }})</button>
+  </form>
+</div>
+<div id="actionProgress" class="action-progress hidden"></div>
+<div class="cover-list">
+{% for item in items %}
+<article class="cover-book">
+  <div class="cover-current"><div class="cover-label">Current</div>{% if item.has_cover %}<img src="/covers/current/{{ item.item_id }}" alt="Current cover" loading="lazy" decoding="async">{% else %}<div class="cover-placeholder">No cover</div>{% endif %}</div>
+  <div class="cover-content">
+    <div class="section-title-row"><div><h3>{{ item.title }}</h3><p class="muted">{{ item.metadata_obj.get('authorName') or 'Unknown author' }} · {{ item.profile_obj.get('label','Unknown format') }} · Quality {{ item.quality_score|round|int }}/100</p></div>
+      <div class="compact-actions">
+        <form action="/covers/{{ item.item_id }}/keep-current" method="post" data-ajax data-reload-on-success data-confirm="Keep the current cover and stop future cover suggestions/auto-updates for this book?"><input type="hidden" name="library_id" value="{{ library_id }}"><input type="hidden" name="title" value="{{ item.title }}"><button class="secondary" data-busy-text="Locking cover…">Keep current + lock cover</button></form>
+        <form action="/books/{{ item.item_id }}/control" method="post" data-ajax data-reload-on-success data-confirm="Mark this book complete? It will be fully protected and skipped by future automatic metadata/provider/AI scans."><input type="hidden" name="library_id" value="{{ library_id }}"><input type="hidden" name="title" value="{{ item.title }}"><input type="hidden" name="action" value="mark-complete"><button class="secondary" data-busy-text="Protecting…">Mark complete</button></form>
+      </div>
+    </div>
+    <div class="cover-candidates">
+    {% for c in item.covers %}
+      <div class="cover-option"><img src="{{ c.url }}" alt="{{ c.provider }} cover" loading="lazy" decoding="async"><div><strong>{{ c.provider }}</strong><span>{{ (c.score*100)|round|int }}% match</span></div>
+        <div class="cover-option-actions">
+          <form action="/covers/{{ item.item_id }}/apply" method="post" data-ajax data-reload-on-success><input type="hidden" name="cover_url" value="{{ c.url }}"><input type="hidden" name="library_id" value="{{ library_id }}"><input type="hidden" name="provider" value="{{ c.provider }}"><input type="hidden" name="match_score" value="{{ c.score }}"><button data-busy-text="Applying cover…">Use this cover</button></form>
+          <form action="/covers/{{ item.item_id }}/ignore" method="post" data-ajax data-reload-on-success><input type="hidden" name="cover_url" value="{{ c.url }}"><input type="hidden" name="library_id" value="{{ library_id }}"><input type="hidden" name="provider" value="{{ c.provider }}"><button class="secondary" data-busy-text="Ignoring…">Ignore this cover</button></form>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+</article>
+{% else %}<div class="empty">No pending cover suggestions. Review <a href="/covers/updated?library_id={{ library_id }}">Updated Covers</a> or <a href="/covers/ignored?library_id={{ library_id }}">Ignored / Locked Covers</a>.</div>{% endfor %}
+</div>
+{% if pages > 1 %}<nav class="pager">{% if page > 1 %}<a class="button-link secondary" href="/covers?page={{ page-1 }}&library_id={{ library_id }}">← Previous</a>{% endif %}<span>Page {{ page }} of {{ pages }}</span>{% if page < pages %}<a class="button-link secondary" href="/covers?page={{ page+1 }}&library_id={{ library_id }}">Next →</a>{% endif %}</nav>{% endif %}
+{% endblock %}

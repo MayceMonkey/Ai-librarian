@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row">
+  <div><h1>{{ s.title }}</h1><div class="badges"><span class="badge media-{{ s.profile.get('kind','unknown') }}">{{ s.profile.get('label','Unknown format') }}</span><span class="badge">{{ (s.confidence*100)|round|int }}% confidence</span><span class="badge">{{ s.source }}</span><span class="badge">{{ s.status }}</span></div></div>
+  <a href="/suggestions" class="button-link secondary">← Review queue</a>
+</div>
+
+<section class="media-summary">
+  <h2>Detected media</h2>
+  <div class="format-grid">
+    <div class="format-card"><strong>{{ s.profile.get('label','Unknown') }}</strong><span>Type</span></div>
+    <div class="format-card"><strong>{{ s.profile.get('audioFileCount',0) }}</strong><span>Audio files</span></div>
+    <div class="format-card"><strong>{{ s.profile.get('ebookFormat','—') or '—' }}</strong><span>E-book format</span></div>
+    <div class="format-card"><strong>{{ (s.profile.get('durationSeconds',0)/3600)|round(1) }} h</strong><span>Audio duration</span></div>
+  </div>
+  {% if s.profile.get('kind') == 'ebook' %}<p class="good-note">Narrator and audiobook-duration checks are intentionally not applicable to this e-book-only item.</p>{% endif %}
+</section>
+
+<section class="protection-panel">
+  <div class="section-title-row"><div><h2>Book protection</h2><p class="muted">Use locks to protect curated books and avoid wasting provider/AI work on items you consider finished.</p></div><a class="button-link secondary" href="/locks?library_id={{ s.library_id }}">Protected Books</a></div>
+  <div class="badges">{% if control.complete %}<span class="badge badge-lock">✓ Complete</span>{% endif %}{% if control.full_lock %}<span class="badge badge-lock">Full lock</span>{% endif %}{% if control.metadata_lock %}<span class="badge">Metadata locked</span>{% endif %}{% if control.cover_lock %}<span class="badge">Cover locked</span>{% endif %}{% if control.scan_exempt %}<span class="badge">Scan exempt</span>{% endif %}{% if not control.full_lock and not control.metadata_lock and not control.cover_lock and not control.scan_exempt and not control.complete %}<span class="muted">No protections enabled.</span>{% endif %}</div>
+  {% if control.reason %}<p><strong>Reason:</strong> {{ control.reason }}</p>{% endif %}
+  <div class="compact-actions">
+    <form action="/books/{{ s.item_id }}/control" method="post" data-ajax data-reload-on-success data-confirm="Mark this book complete? It will be fully protected and skipped by future provider/AI scans."><input type="hidden" name="library_id" value="{{ s.library_id }}"><input type="hidden" name="title" value="{{ s.title }}"><input type="hidden" name="action" value="mark-complete"><button data-busy-text="Protecting…">Mark Complete</button></form>
+    <form action="/books/{{ s.item_id }}/control" method="post" data-ajax data-reload-on-success><input type="hidden" name="library_id" value="{{ s.library_id }}"><input type="hidden" name="title" value="{{ s.title }}"><input type="hidden" name="action" value="metadata-lock"><button class="secondary">Lock Metadata</button></form>
+    <form action="/books/{{ s.item_id }}/control" method="post" data-ajax data-reload-on-success><input type="hidden" name="library_id" value="{{ s.library_id }}"><input type="hidden" name="title" value="{{ s.title }}"><input type="hidden" name="action" value="cover-lock"><button class="secondary">Lock Cover</button></form>
+    <form action="/books/{{ s.item_id }}/control" method="post" data-ajax data-reload-on-success><input type="hidden" name="library_id" value="{{ s.library_id }}"><input type="hidden" name="title" value="{{ s.title }}"><input type="hidden" name="action" value="scan-exempt"><button class="secondary">Skip Auto Scans</button></form>
+    {% if control.full_lock or control.metadata_lock or control.cover_lock or control.scan_exempt or control.complete %}<form action="/books/{{ s.item_id }}/control" method="post" data-ajax data-reload-on-success data-confirm="Remove all protections from this book?"><input type="hidden" name="library_id" value="{{ s.library_id }}"><input type="hidden" name="title" value="{{ s.title }}"><input type="hidden" name="action" value="unlock"><button class="secondary">Unlock All</button></form>{% endif %}
+  </div>
+</section>
+
+<section>
+  <h2>Why it was flagged</h2>
+  <ul>{% for r in s.reasons_list %}<li>{{ r }}</li>{% endfor %}</ul>
+</section>
+
+{% if s.evidence_list %}
+<section>
+  <h2>Metadata evidence</h2>
+  <div class="provider-grid">
+  {% for e in s.evidence_list %}
+    <article class="provider-card">
+      {% if e.error %}<div><strong>{{ e.provider }}</strong><p class="error">{{ e.error }}</p></div>
+      {% elif e.type in ['series','narrator','duplicate','genre'] %}
+        <div><strong>{{ e.type|title }} evidence</strong>
+          {% if e.message %}<p>{{ e.message }}</p>{% endif %}
+          {% if e.series %}<p>{{ e.series }}{% if e.sequence %} #{{ e.sequence }}{% endif %}</p>{% endif %}
+          {% if e.narrator %}<p>{{ e.narrator }}</p>{% endif %}
+          {% if e.sources %}<p class="muted">Sources: {{ e.sources|join(', ') }}</p>{% endif %}
+          {% if e.genres %}<div class="tags">{% for x in e.genres %}<span>{{ x }}</span>{% endfor %}</div>{% endif %}
+        </div>
+      {% else %}
+        {% if e.coverUrl %}<img src="{{ e.coverUrl }}" alt="cover">{% endif %}
+        <div><strong>{{ e.provider }}</strong><h3>{{ e.title }}</h3><p>{{ e.authorName or '' }}</p>
+          <p>Match: {{ (e.score*100)|round|int }}%{% if e.identifierExact %} · exact identifier{% endif %}{% if e.durationSimilarity %} · duration {{ (e.durationSimilarity*100)|round|int }}%{% endif %}</p>
+          {% if e.narratorName %}<p>Narrator: {{ e.narratorName }}</p>{% endif %}
+          {% if e.series %}<p>Series: {% for x in e.series %}{{ x.series }}{% if x.sequence %} #{{ x.sequence }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+          {% if e.genres %}<div class="tags">{% for x in e.genres[:8] %}<span>{{ x }}</span>{% endfor %}</div>{% endif %}
+          {% if e.subjects %}<div class="tags muted-tags">{% for x in e.subjects[:8] %}<span>{{ x }}</span>{% endfor %}</div>{% endif %}
+        </div>
+      {% endif %}
+    </article>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if s.status == 'pending' %}
+<form action="/suggestions/{{ s.id }}/edit" method="post" id="editSuggestion" data-ajax>
+<section>
+  <div class="section-title-row"><div><h2>Field-by-field approval</h2><p class="muted">Edit the proposed value and check only the fields you want written to Audiobookshelf.</p></div><button type="button" class="secondary" id="selectChangedFields">Select changed fields</button></div>
+  <div class="field-editor">
+    <div class="field-row header"><div>Apply</div><div>Field</div><div>Current</div><div>Proposed / editable</div></div>
+    {% set fields = ['title','subtitle','authorName','narratorName','publisher','publishedYear','language','isbn','asin'] %}
+    {% for f in fields %}
+      {% if not (f == 'narratorName' and s.profile.get('kind') == 'ebook') %}
+      <div class="field-row {% if s.old.get(f) != s.new.get(f) %}changed{% endif %}" data-field-row>
+        <div><input type="checkbox" name="apply_fields" value="{{ f }}" {% if f in s.selected_fields_list %}checked{% endif %}></div>
+        <div><strong>{{ f }}</strong></div>
+        <div class="old-value">{{ s.old.get(f) or '—' }}</div>
+        <div><input type="text" name="{{ f }}" value="{{ s.new.get(f) or '' }}"></div>
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="field-row {% if s.old.get('genres') != s.new.get('genres') %}changed{% endif %}" data-field-row>
+      <div><input type="checkbox" name="apply_fields" value="genres" {% if 'genres' in s.selected_fields_list %}checked{% endif %}></div><div><strong>genres</strong></div>
+      <div class="old-value">{{ (s.old.get('genres') or [])|join(', ') or '—' }}</div>
+      <div><textarea name="genres" rows="7">{{ (s.new.get('genres') or [])|join('\n') }}</textarea><small>One per line, comma, or semicolon.</small></div>
+    </div>
+    <div class="field-row {% if s.old.get('series') != s.new.get('series') %}changed{% endif %}" data-field-row>
+      <div><input type="checkbox" name="apply_fields" value="series" {% if 'series' in s.selected_fields_list %}checked{% endif %}></div><div><strong>series</strong></div>
+      <div class="old-value">{% for x in s.old.get('series') or [] %}{{ x.get('series',x.get('name','')) }}{% if x.get('sequence') %} | {{ x.get('sequence') }}{% endif %}<br>{% else %}—{% endfor %}</div>
+      <div><textarea name="series_text" rows="5">{% for x in s.new.get('series') or [] %}{{ x.get('series',x.get('name','')) }}{% if x.get('sequence') %} | {{ x.get('sequence') }}{% endif %}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea><small>One series per line: <code>Series Name | 2.5</code></small></div>
+    </div>
+    <div class="field-row {% if s.old.get('description') != s.new.get('description') %}changed{% endif %}" data-field-row>
+      <div><input type="checkbox" name="apply_fields" value="description" {% if 'description' in s.selected_fields_list %}checked{% endif %}></div><div><strong>description</strong></div>
+      <div class="old-value description-cell">{{ s.old.get('description') or '—' }}</div>
+      <div><textarea name="description" rows="10">{{ s.new.get('description') or '' }}</textarea></div>
+    </div>
+  </div>
+  <div class="actions footer-actions"><button type="submit" data-busy-text="Saving…">Save edits</button><span class="muted">Saving does not write to Audiobookshelf yet.</span></div>
+</section>
+</form>
+
+<div class="actions final-actions">
+  <form action="/suggestions/{{ s.id }}/apply" method="post" data-ajax data-redirect="/suggestions?status=applied"><button data-busy-text="Applying to Audiobookshelf…">Apply selected fields</button></form>
+  <form action="/suggestions/{{ s.id }}/apply-metadata-lock" method="post" data-ajax data-redirect="/suggestions?status=applied" data-confirm="Apply the selected fields, then lock this book's metadata against future changes?"><button class="secondary lock-apply" data-busy-text="Applying + locking…">Apply + Metadata Lock</button></form>
+  <form action="/suggestions/{{ s.id }}/apply-complete" method="post" data-ajax data-redirect="/suggestions?status=applied" data-confirm="Apply the selected fields, then mark this book complete and skip future provider/AI work?"><button class="complete-action" data-busy-text="Applying + completing…">Apply + Complete</button></form>
+  <form action="/suggestions/{{ s.id }}/ignore" method="post" data-ajax data-redirect="/suggestions"><button class="secondary" data-busy-text="Ignoring…">Ignore suggestion</button></form>
+</div>
+{% elif s.status == 'applied' %}
+<div class="applied-detail-state{% if control.complete or control.full_lock %} complete{% elif control.metadata_lock %} metadata-locked{% endif %}">
+  {% if control.complete %}<strong>✓ Applied and marked complete.</strong><span>This book is fully protected and excluded from automatic provider/AI scans.</span>
+  {% elif control.full_lock %}<strong>Applied and fully locked.</strong><span>Unlock the book before reverting metadata.</span>
+  {% elif control.metadata_lock %}<strong>Applied and metadata locked.</strong><span>Unlock metadata before reverting this suggestion.</span>
+  {% else %}<strong>Applied.</strong><span>This suggestion can still be reverted.</span>{% endif %}
+</div>
+{% if control.complete or control.full_lock or control.metadata_lock %}
+<button class="secondary revert-disabled" disabled title="Unlock metadata before reverting">Revert applied fields</button>
+{% else %}
+<form action="/suggestions/{{ s.id }}/revert" method="post" data-ajax data-reload-on-success><button class="danger" data-busy-text="Reverting…">Revert applied fields</button></form>
+{% endif %}
+{% endif %}
+{% endblock %}

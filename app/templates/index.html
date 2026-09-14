@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row">
+  <div><h1>Library Health</h1><p class="muted">A whole-library score based on applicable metadata for each item format.</p></div>
+  {% if quality.total %}<div class="quality-ring quality-{{ 'excellent' if quality.avg >= 90 else 'good' if quality.avg >= 75 else 'fair' if quality.avg >= 50 else 'poor' }}"><strong>{{ quality.avg|round|int }}</strong><span>/100</span></div>{% endif %}
+</div>
+<div class="cards" id="statsCards">
+  <div class="card"><div class="big" id="qualityStat">{{ quality.avg|round|int }}</div><div>Library quality score</div></div>
+  <div class="card"><div class="big" id="pendingStat">{{ pending }}</div><div>Pending suggestions</div></div>
+  <div class="card"><div class="big" id="duplicateStat">{{ duplicate_count }}</div><div>Duplicate pairs</div></div>
+  <div class="card"><div class="big" id="coverPendingStat">{{ cover_pending }}</div><div>Pending covers</div></div>
+  <div class="card"><div class="big" id="pairingStat">{{ pairing_pending }}</div><div>Audio + eBook pairs</div></div>
+  <div class="card"><div class="big">{{ hybrid_count }}</div><div>Already hybrid</div></div>
+  <div class="card"><div class="big" id="lockedStat">{{ locked_count }}</div><div>Protected books</div></div>
+  <div class="card"><div class="big" id="completeStat">{{ complete_count }}</div><div>Marked complete</div></div>
+</div>
+
+{% if quality.total %}
+<section>
+  <div class="section-title-row"><div><h2>Metadata quality</h2><p class="muted">Format-specific fields such as narrator are excluded from e-book-only scores.</p></div><span class="badge">{{ quality.total }} items scored</span></div>
+  <div class="quality-bands">
+    <div><strong>{{ quality.excellent }}</strong><span>90–100 Excellent</span></div>
+    <div><strong>{{ quality.good }}</strong><span>75–89 Good</span></div>
+    <div><strong>{{ quality.fair }}</strong><span>50–74 Fair</span></div>
+    <div><strong>{{ quality.poor }}</strong><span>&lt;50 Needs work</span></div>
+  </div>
+  <div class="dimension-grid">
+    {% for name,score in quality.dimensions.items() %}
+    <div class="dimension-row"><div><strong>{{ name }}</strong><span>{{ score|round|int }}%</span></div><div class="mini-bar"><i style="width:{{ score }}%"></i></div></div>
+    {% endfor %}
+  </div>
+  <div class="quick-links">
+    <a class="button-link secondary" href="/covers">Review {{ cover_pending }} covers</a><a class="button-link secondary" href="/covers/updated">Updated covers</a><a class="button-link secondary" href="/duplicates">Resolve duplicates</a><a class="button-link secondary" href="/pairings">Pair audio + eBooks</a><a class="button-link secondary" href="/people">Clean people</a><a class="button-link secondary" href="/genres">Bulk genres</a><a class="button-link secondary" href="/locks">Protected books</a><a class="button-link secondary" href="/covers/ignored">Ignored covers</a>
+  </div>
+</section>
+{% endif %}
+
+{% if error %}<div class="error"><strong>Could not connect to Audiobookshelf.</strong><br>{{ error }}</div>{% endif %}
+<section>
+  <h2>Scan a library</h2>
+  <form method="post" action="/scan" class="scanform" id="scanForm" data-scan-form data-ajax>
+    <label>Book library<select name="library_id" required>{% for lib in libraries %}<option value="{{ lib.id }}" {% if settings.library_id == lib.id %}selected{% endif %}>{{ lib.name }}</option>{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="use_ai" value="1" {% if settings.ai_provider == "none" %}disabled{% endif %}> Use {% if settings.ai_provider == 'ollama' %}local Ollama{% else %}{{ settings.ai_provider }}{% endif %} AI ({{ settings.ai_scan_mode|title }} mode)</label>
+    <button type="submit" data-busy-text="Starting scan…" {% if not libraries %}disabled{% endif %}>Scan + verify</button>
+  </form>
+  <p class="muted">The scan scores every item and audits applicable genres plus suspicious metadata structure using local/provider evidence first. In <strong>Smart</strong> mode, AI is called when evidence is incomplete, ambiguous, or a metadata anomaly is detected; unchanged results are reused from cache.</p>{% if settings.ai_provider == 'ollama' %}<div class="{% if local_ai.connected and local_ai.model_installed %}good-note{% else %}warning-note{% endif %}"><strong>Local Ollama:</strong> {% if local_ai.connected %}connected to {{ local_ai.url }}{% else %}not reachable at {{ local_ai.url }}{% endif %}<br><strong>Model:</strong> {{ local_ai.model }} — {% if local_ai.model_installed %}installed and ready{% else %}not installed{% endif %}{% if local_ai.connected and not local_ai.model_installed %}<br><code>ollama pull {{ local_ai.model }}</code>{% endif %}<br><span class="muted">Local-only mode: {{ 'ON' if settings.local_ai_only else 'off' }} · thinking: {{ 'on' if settings.ollama_think else 'off' }} · max {{ settings.ai_max_completion_tokens }} output tokens · concurrency {{ settings.ollama_concurrency }}</span></div>{% else %}<p class="muted"><strong>AI guardrails:</strong> {{ settings.ai_reasoning_effort }} reasoning · max {{ settings.ai_max_completion_tokens }} completion tokens/request · {% if settings.ai_max_scan_cost_usd > 0 %}${{ '%.2f'|format(settings.ai_max_scan_cost_usd) }} estimated scan budget{% else %}budget limit disabled{% endif %}.</p>{% endif %}<p class="muted"><strong>Auto Apply:</strong> {% if settings.allow_auto_apply %}<span class="good-note-inline">enabled for suggestions at or above {{ (settings.auto_apply_threshold*100)|round|int }}% confidence</span>{% else %}disabled{% endif %}</p>
+</section>
+<section id="liveScan" class="live-scan {% if not running %}hidden{% endif %}" data-scan-id="{{ running.id if running else '' }}">
+  <div class="section-title-row"><div><h2>Live scan</h2><p class="muted" id="scanStatusText">{{ running.progress_message if running else 'No scan running' }}</p></div><span class="status-pill" id="scanStatusPill">{{ running.status if running else '' }}</span></div>
+  <div class="progress-shell"><div class="progress-bar" id="scanProgressBar" style="width:{{ running.percent if running else 0 }}%"></div></div>
+  <div class="progress-grid"><div><strong id="scanPercent">{{ running.percent if running else 0 }}%</strong><span>Progress</span></div><div><strong id="scanProcessed">{{ running.processed_count if running else 0 }} / {{ running.item_count if running else 0 }}</strong><span>Checked</span></div><div><strong id="scanFlagged">{{ running.flagged_count if running else 0 }}</strong><span>Flagged</span></div><div><strong id="scanErrors">{{ running.error_count if running else 0 }}</strong><span>Provider/AI errors</span></div></div>
+  <div class="progress-grid ai-usage-grid"><div><strong id="scanAIRequests">{{ running.ai_requests if running else 0 }}</strong><span>{% if settings.ai_provider == 'ollama' %}Local AI requests{% else %}AI requests{% endif %}</span></div><div><strong id="scanAICache">{{ running.ai_cache_hits if running else 0 }}</strong><span>AI cache hits</span></div><div><strong id="scanAITokens">{{ ((running.ai_input_tokens or 0)+(running.ai_output_tokens or 0)) if running else 0 }}</strong><span>Prompt + output tokens</span></div><div><strong id="scanAICost">{% if settings.ai_provider == 'ollama' %}Local{% else %}${{ '%.4f'|format(running.ai_estimated_cost or 0) if running else '0.0000' }}{% endif %}</strong><span>{% if settings.ai_provider == 'ollama' %}Inference location{% else %}Estimated AI cost{% endif %}</span></div></div>
+  {% if settings.ai_provider != 'ollama' %}<p class="muted ai-budget-line">AI budget remaining: <strong id="scanAIBudget">{% if running and running.ai_budget_remaining >= 0 %}${{ '%.4f'|format(running.ai_budget_remaining) }}{% else %}Unlimited{% endif %}</strong> · Reasoning tokens: <strong id="scanAIReasoning">{{ running.ai_reasoning_tokens if running else 0 }}</strong></p>{% else %}<p class="muted ai-budget-line">Ollama model: <strong>{{ settings.ollama_model }}</strong> · no cloud token charges</p>{% endif %}
+  <p class="current-book"><span class="pulse-dot"></span><span id="scanCurrentTitle">{{ running.current_title if running else '' }}</span></p><div class="event-feed" id="scanEvents"></div>
+</section>
+<section><h2>Latest format breakdown</h2>{% set ms = latest.media_stats if latest else {} %}<div class="format-grid"><div class="format-card"><strong>{{ ms.get('audiobook',0) }}</strong><span>🎧 Audiobooks</span></div><div class="format-card"><strong>{{ ms.get('ebook',0) }}</strong><span>📖 E-books</span></div><div class="format-card"><strong>{{ ms.get('hybrid',0) }}</strong><span>🎧+📖 Hybrid</span></div><div class="format-card"><strong>{{ ms.get('unknown',0) }}</strong><span>❓ Unknown</span></div></div></section>
+<section><h2>Recent scans</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Status</th><th>Source</th><th>Checked</th><th>Flagged</th><th>AI calls</th><th>AI cache</th><th>{% if settings.ai_provider == 'ollama' %}AI location{% else %}Est. AI cost{% endif %}</th><th>Errors</th></tr></thead><tbody>{% for s in history %}<tr><td>#{{ s.id }}</td><td><span class="status-pill status-{{ s.status }}">{{ s.status }}</span></td><td>{{ s.source }}</td><td>{{ s.processed_count }}/{{ s.item_count }}</td><td>{{ s.flagged_count }}</td><td>{{ s.ai_requests or 0 }}</td><td>{{ s.ai_cache_hits or 0 }}</td><td>{% if settings.ai_provider == 'ollama' %}Local{% else %}${{ '%.4f'|format(s.ai_estimated_cost or 0) }}{% endif %}</td><td>{{ s.error_count }}</td></tr>{% else %}<tr><td colspan="9" class="muted">No scans yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

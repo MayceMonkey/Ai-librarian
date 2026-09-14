@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section-title-row"><div><h1>Updated Covers</h1><p class="muted">Successful cover changes are archived here so the Pending Covers screen only shows books you have not updated.</p></div><span class="badge good">{{ total }} updated</span></div>
+<div class="tabs cover-tabs"><a class="button-link secondary" href="/covers?library_id={{ library_id }}">Pending Covers ({{ pending_total }})</a><a class="button-link" href="/covers/updated?library_id={{ library_id }}">Updated Covers ({{ total }})</a><a class="button-link secondary" href="/covers/ignored?library_id={{ library_id }}">Ignored / Locked</a></div>
+<div class="cover-list">
+{% for item in items %}
+<article class="cover-book updated-cover-card">
+  <div class="cover-current"><div class="cover-label">Current in Audiobookshelf</div><img src="/covers/current/{{ item.item_id }}?v={{ item.applied_at }}" alt="Updated cover" loading="lazy" decoding="async"></div>
+  <div class="cover-content"><div class="badges"><span class="badge good">Updated</span>{% if item.provider %}<span class="badge">{{ item.provider }}</span>{% endif %}{% if item.match_score is not none %}<span class="badge">{{ (item.match_score*100)|round|int }}% match</span>{% endif %}</div><h3>{{ item.title }}</h3><p class="muted">{{ item.metadata_obj.get('authorName') or 'Unknown author' }}</p><p class="muted">Applied {{ item.applied_label }}</p><details><summary>Applied source</summary><p class="cover-source-url">{{ item.cover_url }}</p></details></div>
+</article>
+{% else %}<div class="empty">No covers have been updated through AI Librarian v0.5 yet.</div>{% endfor %}
+</div>
+{% if pages > 1 %}<nav class="pager">{% if page > 1 %}<a class="button-link secondary" href="/covers/updated?page={{ page-1 }}&library_id={{ library_id }}">← Previous</a>{% endif %}<span>Page {{ page }} of {{ pages }}</span>{% if page < pages %}<a class="button-link secondary" href="/covers/updated?page={{ page+1 }}&library_id={{ library_id }}">Next →</a>{% endif %}</nav>{% endif %}
+{% endblock %}
